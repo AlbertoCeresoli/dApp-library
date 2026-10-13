@@ -1171,16 +1171,25 @@ class SpectrumSharingDApp(DApp):
         )
 
     def _decode_xapp_control_envelope(self, data: bytes) -> dict:
-        return self._decode_envelope(
-            data,
-            msg_type="Spectrum-XAppControlData",
-            type_field="controlType", payload_field="controlPayload",
-            inner_type_map={
-                "prbBlockedControl": "Spectrum-PRBBlockedControl",
-                "configControl": "Spectrum-ConfigControl",
-            },
-            type_by_key={"prbBlockedControl": "prbBlocked", "configControl": "config"},
-        )
+        try:
+            return self._decode_envelope(
+                data,
+                msg_type="Spectrum-XAppControlData",
+                type_field="controlType", payload_field="controlPayload",
+                inner_type_map={
+                    "prbBlockedControl": "Spectrum-PRBBlockedControl",
+                    "configControl": "Spectrum-ConfigControl",
+                },
+                type_by_key={"prbBlockedControl": "prbBlocked", "configControl": "config"},
+            )
+        except asn1tools.Error:
+            if self.encoding_method != "asn1":
+                raise
+            # dApp-flexric's spectrum xApp (a30eedfc) predates the
+            # XAppControlData envelope and sends a bare PRBBlockedControl.
+            payload = self.spectrum_encoder.decode("Spectrum-PRBBlockedControl", data)
+            return {"type": "prbBlocked", "payload_key": "prbBlockedControl",
+                    "payload": payload, "timestamp": None}
 
     def _encode_spectrum_message(self, message_type: str, data: dict) -> bytes:
         """Encode a spectrum message using the configured encoding method."""
